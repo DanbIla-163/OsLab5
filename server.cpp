@@ -289,7 +289,8 @@ void Barber(bool isMainBarber) {
 
     LogEvent(barberName + " starts work");
 
-    while (shopOpen && servedCount < TOTAL_CLIENTS) {
+    // Изменяем условие - работаем пока shopOpen = true
+    while (shopOpen) {
         unique_lock<mutex> lock(mtx);
 
         // Парикмахер спит если нет клиентов
@@ -429,13 +430,101 @@ int main() {
     // Даем парикмахеру время начать работу
     this_thread::sleep_for(chrono::seconds(1));
 
-    // Автоматическое создание клиентов
-    CreateClientsAutomatically(TOTAL_CLIENTS, 54000);
+    // ВЫБОР РЕЖИМА РАБОТЫ
+    cout << "Select server mode:" << endl;
+    cout << "1 - Automatic clients (self-test)" << endl;
+    cout << "2 - Manual clients (wait for connections)" << endl;
+    cout << "Enter choice (1 or 2): ";
 
-    // Завершение работы
-    LogEvent("All clients processed, closing shop...");
-    shopOpen = false;
-    cv.notify_all();
+    int mode;
+    cin >> mode;
+
+    if (mode == 1) {
+        // АВТОМАТИЧЕСКИЙ РЕЖИМ
+        LogEvent("=== AUTOMATIC MODE ===");
+        CreateClientsAutomatically(TOTAL_CLIENTS, 54000);
+
+        // Завершение работы после автоматических клиентов
+        LogEvent("All automatic clients processed, closing shop...");
+        shopOpen = false;
+        cv.notify_all();
+    } else {
+        // РУЧНОЙ РЕЖИМ
+        LogEvent("=== MANUAL MODE ===");
+        LogEvent("Waiting for manual client connections...");
+        LogEvent("Run client.exe manually to connect clients");
+
+        int clientId = 1;
+
+        // Функция для обработки ручных подключений
+        auto HandleManualConnection = [](SOCKET clientSocket, int clientId) {
+            LogEvent("Manual client " + to_string(clientId) + " connected!");
+
+            // Сохраняем сокет клиента
+            {
+                lock_guard<mutex> lock(socketsMtx);
+                clientSockets[clientId] = clientSocket;
+            }
+
+            // Отправляем приветствие
+            string welcome = "Welcome to Barber Shop! You are manual client #" + to_string(clientId);
+            SendToClient(clientSocket, welcome);
+
+            // Добавляем в очередь
+            {
+                lock_guard<mutex> lock(mtx);
+                clients.push(clientId);
+                LogEvent("Manual client " + to_string(clientId) + " in queue. Queue size: " + to_string(clients.size()));
+                totalClientsCreated++;
+            }
+
+            // Будим парикмахера если спит
+            if (barberSleeping) {
+                cv.notify_one();
+            }
+
+            // Ожидаем завершения стрижки
+            char buffer[1024];
+            bool haircutFinished = false;
+
+            while (!haircutFinished && shopOpen) {
+                int bytesReceived = recv(clientSocket, buffer, sizeof(buffer) - 1, 0);
+                if (bytesReceived > 0) {
+                    buffer[bytesReceived] = '\0';
+                    string message = string(buffer);
+
+                    if (message == "HAIRCUT_FINISHED") {
+                        LogEvent("Manual client " + to_string(clientId) + " finished!");
+                        haircutFinished = true;
+                    }
+                } else if (bytesReceived <= 0) {
+                    break;
+                }
+            }
+
+            // Закрываем соединение
+            {
+                lock_guard<mutex> lock(socketsMtx);
+                clientSockets.erase(clientId);
+            }
+            closesocket(clientSocket);
+            LogEvent("Manual client " + to_string(clientId) + " disconnected");
+        };
+
+        // Основной цикл для ручных подключений
+        while (shopOpen) {
+            SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
+            if (clientSocket == INVALID_SOCKET) {
+                continue;
+            }
+
+            // Обрабатываем подключение в отдельном потоке
+            thread clientThread(HandleManualConnection, clientSocket, clientId);
+            clientThread.detach();
+
+            clientId++;
+        }
+    }
 
     // Ждем завершения парикмахера
     if (barberThread.joinable()) {
