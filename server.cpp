@@ -34,7 +34,7 @@ const int TOTAL_CLIENTS = 5;
 
 // Фразы для диалога на английском
 vector<string> barberPhrases = {
-    "Welcome, process ",
+    "Welcome, diar Client ",
     "Hello! How are you today?",
     "What haircut would you like?",
     "Excellent choice!",
@@ -46,10 +46,10 @@ vector<string> barberPhrases = {
 
 vector<string> clientPhrases = {
     "Hello, Mr. Barber!",
-    "I'd like a fashionable haircut!",
-    "Make it shorter in the back",
+    "I'd like a krutaya haircut!",
+    "Make it po bokam pokoroche",
     "Yes, exactly like that!",
-    "Oh, that tickles a bit!",
+    "Oh, that viski kosie sdelai!",
     "It looks great!",
     "Thanks for the haircut!",
     "I'll definitely come back!"
@@ -75,9 +75,9 @@ string GetRandomPhrase(const vector<string>& phrases) {
 void BarberDialogue(SOCKET clientSocket, int clientId, const string& barberName) {
     // Структурированные диалоговые сцены
     vector<pair<string, string>> dialogueScenes = {
-        {"Welcome, process " + to_string(clientId) + "!", "Hello, Mr. Barber!"},
+        {"Welcome, diar Client " + to_string(clientId) + "!", "Hello, Mr. Barber!"},
         {"How are you today?", "I'm fine, thank you!"},
-        {"What haircut would you like?", "I'd like a fashionable haircut!"},
+        {"What haircut would you like?", "I'd like a krutaya haircut!"},
         {"Excellent choice! Let me work on that...", "Great, I'm excited!"},
         {"How does that look?", "It looks amazing!"},
         {"Almost done... just a little more...", "Take your time!"},
@@ -108,14 +108,6 @@ void BarberDialogue(SOCKET clientSocket, int clientId, const string& barberName)
         this_thread::sleep_for(chrono::milliseconds(dis(gen)));
     }
 }
-void NotifyClientFinished(int clientId) {
-    lock_guard<mutex> lock(socketsMtx);
-    auto it = clientSockets.find(clientId);
-    if (it != clientSockets.end()) {
-        SendToClient(it->second, "HAIRCUT_FINISHED");
-        LogEvent("Notified client " + to_string(clientId) + " that haircut is finished");
-    }
-}
 
 void NotifyClientStarted(int clientId) {
     lock_guard<mutex> lock(socketsMtx);
@@ -126,8 +118,16 @@ void NotifyClientStarted(int clientId) {
     }
 }
 
+void NotifyClientFinished(int clientId) {
+    lock_guard<mutex> lock(socketsMtx);
+    auto it = clientSockets.find(clientId);
+    if (it != clientSockets.end()) {
+        SendToClient(it->second, "HAIRCUT_FINISHED");
+        LogEvent("Notified client " + to_string(clientId) + " that haircut is finished");
+    }
+}
+
 void AutoCreateClient(int clientId, int port) {
-    // Инициализация Winsock для клиента
     WSADATA wsData;
     if (WSAStartup(MAKEWORD(2, 2), &wsData) != 0) {
         LogEvent("Client " + to_string(clientId) + " - WSAStartup failed!");
@@ -176,7 +176,7 @@ void AutoCreateClient(int clientId, int port) {
     }
 
     // Отправляем приветствие и информацию об очереди
-    string welcome = "Welcome to Barber Shop! You are client #" + to_string(clientId);
+    string welcome = "Salam aleikum to Barber Shop! You are client #" + to_string(clientId);
     SendToClient(clientSocket, welcome);
 
     // Отправляем текущий размер очереди
@@ -268,7 +268,7 @@ void CreateClientsAutomatically(int totalClients, int port) {
 
         // Если уже создано достаточно клиентов для тестирования помощника, можно сделать паузу
         if (i == 3) {
-            LogEvent("=== Created 3 clients - queue should trigger brother helper ===");
+            LogEvent("=== Created 3 clients - queue is big. We need brother helper ===");
             this_thread::sleep_for(chrono::seconds(2));
         }
     }
